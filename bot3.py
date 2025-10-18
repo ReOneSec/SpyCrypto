@@ -59,7 +59,7 @@ class DatabaseManager:
         
     def get_stats(self, chat_id):
         seven_days_ago = datetime.now() - timedelta(days=7)
-        query = {"chat_id": chat_id, "timestamp": {"gte": seven_days_ago}}
+        query = {"chat_id": chat_id, "timestamp": {"$gte": seven_days_ago}}
         
         deleted_count = self.actions.count_documents({**query, "action": "deleted"})
         muted_count = self.actions.count_documents({**query, "action": "muted"})
@@ -68,7 +68,6 @@ class DatabaseManager:
         return deleted_count, muted_count, banned_count
 
 # --- Regex & Bot Data ---
-# Dictionary keys are now user-friendly for generating the info message
 PATTERNS = {
     "Ethereum (EVM chains)": r"0x[a-fA-F0-9]{40}",
     "Bitcoin (BTC)": r"[13][a-km-zA-HJ-NP-Z1-9]{25,34}|bc1[a-zA-HJ-NP-Z0-9]{38,58}",
@@ -87,26 +86,31 @@ PATTERNS = {
     "Avalanche (AVAX X-Chain)": r"X-[a-km-zA-HJ-NP-Z1-9]{44}",
     "Cosmos (ATOM)": r"cosmos1[a-z0-9]{38}",
     "Tezos (XTZ)": r"tz[1-3][a-km-zA-HJ-NP-Z1-9]{33}",
-    "NEAR Protocol": r"[a-z0-9\._-]{2,64}\.near",
+    "NEAR Protocol": r"[a-z0-g\._-]{2,64}\.near",
     "Stellar (XLM)": r"G[A-Z0-9]{55}",
     "Algorand (ALGO)": r"[A-Z2-7]{58}",
     "The Open Network (TON)": r"(?:-1|0):[a-fA-F0-9]{64}|[UEk][a-zA-Z0-9\-_]{47}"
 }
 ADDRESS_REGEX = re.compile(rf"\b({'|'.join(PATTERNS.values())})\b", re.IGNORECASE)
 
-# --- Create the info message dynamically from the PATTERNS dictionary ---
-CHAIN_LIST_TEXT = "\n".join([f"• {name}" for name in sorted(PATTERNS.keys())])
+db = DatabaseManager(MONGO_URI)
+
+# --- Helper Functions ---
+def escape_markdown_v2(text: str) -> str:
+    """Escapes special characters for Telegram MarkdownV2."""
+    escape_chars = r'_*[]()~`>#+-=|{}.!'
+    return re.sub(f'([{re.escape(escape_chars)}])', r'\\\1', text)
+
+# --- FIX: Escape each name individually for safety ---
+CHAIN_LIST_TEXT = "\n".join([f"• {escape_markdown_v2(name)}" for name in sorted(PATTERNS.keys())])
 SUPPORTED_CHAINS_MESSAGE = (
     f"🛡️ *SpyCrypto Moderation Bot*\n\n"
-    f"I keep this group clean by automatically detecting and removing spam\. "
+    f"I keep groups clean by automatically detecting and removing spam\. "
     f"I scan new messages, edited messages, and links for unauthorized content\.\n\n"
     f"*I can detect addresses from hundreds of blockchains, including:*\n"
     f"{CHAIN_LIST_TEXT}"
 )
 
-db = DatabaseManager(MONGO_URI)
-
-# --- Helper Functions ---
 async def log_to_admin_channel(context: ContextTypes.DEFAULT_TYPE, message: str):
     if ADMIN_LOG_CHANNEL:
         try:
@@ -161,11 +165,15 @@ async def process_spam(update: Update, context: ContextTypes.DEFAULT_TYPE, reaso
             logger.warning(f"No permission to ban users in chat {chat.id}")
             
     db.log_action(chat.id, user.id, action_taken, reason)
+    # --- FIX: Escape chat title and reason for safer logging ---
+    safe_reason = escape_markdown_v2(reason)
+    safe_chat_title = escape_markdown_v2(chat.title)
+    
     log_message = (
-        f"✅ *Action Taken in {chat.title}*\n\n"
+        f"✅ *Action Taken in {safe_chat_title}*\n\n"
         f"👤 *User:* {user_mention} `({user.id})`\n"
-        f"⚖️ *Action:* `{action_taken.upper()}`\n"
-        f"🗒️ *Reason:* `{reason}`\n"
+        f"⚖️ *Action:* `{escape_markdown_v2(action_taken.upper())}`\n"
+        f"🗒️ *Reason:* `{safe_reason}`\n"
         f"⚠️ *Total Strikes:* `{new_strike_count}`"
     )
     await log_to_admin_channel(context, log_message)
@@ -227,9 +235,9 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(stats_text, parse_mode=ParseMode.MARKDOWN_V2)
 
-# --- NEW: Handlers for Info Messages ---
-async def info_handler_private(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Sends the info message in a private chat."""
+# --- FIX: Dedicated /start command handler for private chats ---
+async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handles the /start command in private chat."""
     await update.message.reply_text(SUPPORTED_CHAINS_MESSAGE, parse_mode=ParseMode.MARKDOWN_V2, disable_web_page_preview=True)
 
 async def info_handler_group(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -243,13 +251,18 @@ def main():
     application = Application.builder().token(TOKEN).build()
 
     # --- Add Moderation Handlers ---
+    # NOTE: The spam/link checkers will now correctly ignore commands
     application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), check_message))
     application.add_handler(MessageHandler(filters.UpdateType.EDITED_MESSAGE & filters.TEXT & (~filters.COMMAND), check_message))
     application.add_handler(MessageHandler(filters.Entity("url") | filters.Entity("text_link"), handle_links))
-    application.add_handler(CommandHandler("stats", stats_command))
     
-    # --- Add NEW Info Handlers ---
-    application.add_handler(MessageHandler(filters.ChatType.PRIVATE, info_handler_private))
+    # --- Add Command Handlers ---
+    application.add_handler(CommandHandler("stats", stats_command))
+    # --- FIX: Add the new /start command handler ---
+    application.add_handler(CommandHandler("start", start_command, filters=filters.ChatType.PRIVATE))
+    
+    # --- Add Info Handlers ---
+    # This handler is now only for @mentions in groups
     application.add_handler(MessageHandler(filters.Entity("mention") & filters.ChatType.GROUP, info_handler_group))
 
     logger.info("Bot polling started...")
@@ -257,3 +270,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
