@@ -64,7 +64,7 @@ async def check_for_address(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Use the ChatMemberStatus enum for robust checking
         if chat_member.status in (ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER):
-        logger.info(f"Ignoring admin message from {user.username or user.id} in chat {chat_id}")
+            logger.info(f"Ignoring admin message from {user.username or user.id} in chat {chat_id}")
             return
             
     except Exception as e:
