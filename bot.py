@@ -1,10 +1,10 @@
 import re
 import os
 import logging
-from dotenv import load_dotenv  # To load .env file
-from telegram import Update, ChatMemberStatus
+from dotenv import load_dotenv
+from telegram import Update  # <-- THIS LINE IS CHANGED
 from telegram.ext import Application, MessageHandler, filters, ContextTypes
-from telegram.constants import ParseMode
+from telegram.constants import ParseMode, ChatMemberStatus  # <-- THIS LINE IS CHANGED
 from telegram.error import Forbidden, BadRequest
 
 # --- Load Environment Variables ---
