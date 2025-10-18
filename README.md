@@ -14,6 +14,7 @@
 </div>
 <p align="center">See the bot in action. Real-time, detailed audit logs.</p>
 <div align="center">
+<img src="https://www.google.com/search?q=https://placehold.co/800x250/1e293b/94a3b8%3Ftext%3DAdmin%2520Log%2520Channel%2520Screenshot" alt="Admin Log Channel Screenshot">
 </div>
 ✨ Core Features
 SpyCrypto is more than just a spam filter. It's a full moderation suite designed for modern community management.
@@ -98,4 +99,6 @@ Your group is now protected! 🎉
 | /stats | Shows a report of moderation actions in the last 7 days. | Admins only |
 🙌 Contributing
 Contributions are what make the open-source community such an amazing place to learn, inspire, and create. Any contributions you make are greatly appreciated.
-If you have a suggestion that would make this better, please fork the repo and create a pull request. You can also simply open an issue with the tag "enhancement"
+If you have a suggestion that would make this better, please fork the repo and create a pull request. You can also simply open an issue with the tag "enhancement".
+📜 License
+Distributed under the MIT License. See LICENSE for more information.
