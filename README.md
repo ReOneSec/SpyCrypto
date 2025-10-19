@@ -1,109 +1,146 @@
-# SpyCrypto
+# SpyCrypto Moderation Bot 🛡️
 
-A Telegram bot that automatically deletes cryptocurrency wallet addresses from Telegram groups, helping to prevent scams and spam.
+A powerful and intelligent Telegram moderation bot designed to keep your crypto-focused groups clean. It automatically detects and removes spammy messages, specializing in cryptocurrency wallet addresses and unauthorized links.
 
-## Key Features & Benefits
+This bot uses a progressive 3-strike system to warn, mute, and finally ban persistent spammers, all while logging actions to a private admin channel.
 
-*   **Automatic Wallet Address Detection:** Identifies and removes cryptocurrency wallet addresses shared in group chats.
-*   **Spam Prevention:** Reduces crypto-related spam and phishing attempts.
-*   **Group Security:** Enhances the overall security and safety of Telegram groups.
-*   **Easy to Use:** Simple setup and configuration.
+## Features
 
-## Prerequisites & Dependencies
+* **Crypto Address Detection**: Automatically detects and removes messages containing wallet addresses from dozens of popular blockchains.
+* **Link Removal**: Instantly deletes messages from new users that contain URLs or text links.
+* **3-Strike System**: A progressive punishment system to handle offenders fairly but firmly.
+* **Admin Whitelisting**: All group owners and administrators are automatically ignored by the spam filters.
+* **Statistics**: An admin-only `/stats` command to see moderation actions over the last 7 days.
+* **Private Logging**: Logs all actions (warnings, mutes, bans) to a designated admin channel for review.
+* **Persistent Storage**: Uses MongoDB to track user strikes and log moderation history.
 
-Before you begin, ensure you have the following installed:
+---
 
-*   **Python 3.6 or higher:**  Download from [python.org](https://www.python.org/downloads/)
-*   **pip:** Python package installer (usually included with Python).
-*   **Telegram Bot API Token:** Obtain from [BotFather](https://t.me/BotFather) on Telegram.
-*   **MongoDB:** Ensure you have a MongoDB instance running.  Download from [mongodb.com](https://www.mongodb.com/try/download/community) or use a cloud-based service like MongoDB Atlas.
+## How It Works: The 3-Strike System
 
-The following Python libraries are required:
+The bot tracks offenses on a per-user, per-group basis.
 
-*   `python-telegram-bot`
-*   `python-dotenv`
-*   `pymongo[srv]`
+1.  **Strike 1: Warn** ⚠️
+    * The offending message is deleted.
+    * The bot sends a public warning message, tagging the user.
 
-## Installation & Setup Instructions
+2.  **Strike 2: Mute** 🔇
+    * The offending message is deleted.
+    * The user is muted in the group for **24 hours**.
 
-1.  **Clone the repository:**
+3.  **Strike 3: Ban** 🚫
+    * The offending message is deleted.
+    * The user is **permanently banned** from the group.
 
-    ```bash
-    git clone https://github.com/ReOneSec/SpyCrypto.git
-    cd SpyCrypto
-    ```
+---
 
-2.  **Create a virtual environment (recommended):**
+## Supported Blockchains
 
-    ```bash
-    python3 -m venv venv
-    source venv/bin/activate  # On Linux/macOS
-    venv\Scripts\activate  # On Windows
-    ```
+The bot is powered by a comprehensive list of regex patterns to detect a wide variety of wallet addresses.
 
-3.  **Install dependencies:**
+<details>
+  <summary>Click to see the full list of detected chains</summary>
+  
+  * Algorand (ALGO)
+  * Avalanche (AVAX X-Chain)
+  * BNB Beacon Chain
+  * Bitcoin (BTC)
+  * Bitcoin Cash (BCH)
+  * Cardano (ADA)
+  * Cosmos (ATOM)
+  * Dash (DASH)
+  * Dogecoin (DOGE)
+  * Ethereum (EVM chains)
+  * Litecoin (LTC)
+  * Monero (XMR)
+  * NEAR Protocol
+  * Polkadot (DOT)
+  * Ripple (XRP)
+  * Solana (SOL)
+  * Stellar (XLM)
+  * TRON (TRX)
+  * Tezos (XTZ)
+  * The Open Network (TON)
+  * Zcash (ZEC)
 
-    ```bash
-    pip install -r requirements.txt
-    ```
+</details>
 
-4.  **Configure environment variables:**
+---
 
-    *   Create a `.env` file in the project root directory.
-    *   Add the following variables to the `.env` file, replacing the placeholders with your actual values:
+## Bot Commands
 
-        ```
-        TELEGRAM_BOT_TOKEN=YOUR_TELEGRAM_BOT_TOKEN
-        MONGODB_URI=YOUR_MONGODB_CONNECTION_STRING
-        ```
+### User Commands
+* `/start` (in Private Chat): Shows the welcome message and the full list of supported chains.
+* `@BotName` (in a Group): Mentioning the bot in a group will also trigger the info message.
 
-    *   **TELEGRAM_BOT_TOKEN:** Your Telegram Bot API token obtained from BotFather.
-    *   **MONGODB_URI:**  The connection string for your MongoDB database (e.g., `mongodb+srv://user:password@cluster.mongodb.net/database?retryWrites=true&w=majority`).
+### Admin-Only Commands
+* `/stats`: Shows a 7-day summary of all actions taken by the bot in the current group (messages deleted, users muted, users banned).
 
-5.  **Run the bot:**
+---
 
-    ```bash
-    python bot.py
-    ```
+## 🚀 Quick Start & Installation
 
-## Usage Examples & API Documentation
+You can run your own instance of this bot.
 
-Once the bot is running, add it to your Telegram group as an administrator. The bot will automatically detect and delete messages containing cryptocurrency wallet addresses.
+### 1. Prerequisites
+* Python 3.8+
+* A Telegram Bot Token from [@BotFather](https://t.me/BotFather)
+* A MongoDB database (you can get a free one from [MongoDB Atlas](https://www.mongodb.com/cloud/atlas))
 
-**Commands (for bot admins):**
+### 2. Clone & Install
+```bash
+# Clone this repository
+git clone [https://your-repo-url.git](https://your-repo-url.git)
+cd spycrypto-bot
 
-*   `/start` - Starts the bot and displays a welcome message. (Optional)
+# Create a virtual environment (recommended)
+python3 -m venv venv
+source venv/bin/activate
 
-**Example (in a Telegram group):**
+# Install dependencies
+pip install -r requirements.txt
 
-1.  User posts a message containing a cryptocurrency wallet address: "Check out my BTC wallet: bc1qxyz..."
-2.  The bot automatically deletes the message.
+You will need a requirements.txt file:
+python-telegram-bot
+pymongo
+python-dotenv
 
-## Configuration Options
+3. Configuration
+Create a .env file in the main directory and fill it with your credentials:
+# Get this from @BotFather
+TELEGRAM_TOKEN="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
 
-The following environment variables can be configured in the `.env` file:
+# Your MongoDB connection string
+MONGO_URI="mongodb+srv://user:password@cluster0.abcde.mongodb.net/myFirstDatabase?retryWrites=true&w=majority"
 
-*   `TELEGRAM_BOT_TOKEN`:  The Telegram Bot API token.  (Required)
-*   `MONGODB_URI`: The MongoDB connection string. (Required)
-*   `LOG_LEVEL`:  Set the logging level (e.g., `DEBUG`, `INFO`, `WARNING`, `ERROR`).  Defaults to `INFO`.  Configure logging by changing level in `bot.py` if needed.
-*   `ADMIN_USER_IDS`: A comma-separated list of Telegram user IDs who have admin privileges over the bot. (Optional, can be implemented in `bot.py`).
+# The chat ID of your private log channel (must start with -100)
+# Make sure the bot is an admin in this channel!
+ADMIN_LOG_CHANNEL="-1001234567890"
 
-## Contributing Guidelines
+4. Run the Bot
+python main.py
 
-We welcome contributions! To contribute to SpyCrypto, please follow these steps:
+5. Add to Your Group
+ * Add your bot to your Telegram group.
+ * Promote it to Admin.
+ * Grant it the following permissions:
+   * Delete messages
+   * Restrict users
+   * Ban users
+🤝 How to Contribute
+We welcome contributions to make this bot even better! Whether it's adding a new blockchain regex, fixing a bug, or suggesting a new feature, your help is appreciated.
+The easiest way to contribute is by adding new wallet address patterns!
+If you want to contribute, please follow these steps:
+ * Fork this repository.
+ * Create a new branch for your feature or fix:
+   git checkout -b feature/add-new-chain
 
-1.  Fork the repository.
-2.  Create a new branch for your feature or bug fix.
-3.  Implement your changes.
-4.  Write tests to ensure your changes are working correctly.
-5.  Submit a pull request.
+ * Make your changes (e.g., add your new regex to the PATTERNS dictionary in main.py).
+ * Commit your changes:
+   git commit -m "feat: Add support for [Your Chain Name]"
 
-Please ensure that your code adheres to the project's coding standards.
+ * Push to your branch:
+   git push origin feature/add-new-chain
 
-## License Information
-
-This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-This project uses the [python-telegram-bot](https://github.com/python-telegram-bot/python-telegram-bot) library.
+ * Open a Pull Request and describe your changes.
+We'll review your PR as soon as possible. Thank you for helping keep Telegram crypto-safe!
