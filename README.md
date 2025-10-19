@@ -115,8 +115,8 @@ TELEGRAM_TOKEN="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
 ```
 MONGO_URI="mongodb+srv://user:password@cluster0.abcde.mongodb.net/myFirstDatabase?retryWrites=true&w=majority"
 ```
-# The chat ID of your private log channel (must start with -100)
-# Make sure the bot is an admin in this channel!
+### The chat ID of your private log channel (must start with -100)
+### Make sure the bot is an admin in this channel!
 ```
 ADMIN_LOG_CHANNEL="-1001234567890"
 ```
