@@ -1,4 +1,3 @@
-md
 # SpyCrypto
 
 A Telegram bot that automatically deletes cryptocurrency wallet addresses from Telegram groups, helping to prevent scams and spam.
