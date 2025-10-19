@@ -107,11 +107,11 @@ python-dotenv
 ```
 3. Configuration
 Create a .env file in the main directory and fill it with your credentials:
-# Get this from @BotFather
+### Get this from @BotFather
 ```
 TELEGRAM_TOKEN="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
 ```
-# Your MongoDB connection string
+### Your MongoDB connection string
 ```
 MONGO_URI="mongodb+srv://user:password@cluster0.abcde.mongodb.net/myFirstDatabase?retryWrites=true&w=majority"
 ```
