@@ -24,8 +24,8 @@ if not TOKEN or not MONGO_URI:
     exit(1)
 
 # --- Database Manager Class ---
-# (This class is unchanged and correct)
 class DatabaseManager:
+    # (This class is unchanged and correct)
     def __init__(self, uri):
         self.client = MongoClient(uri)
         self.db = self.client.spyCryptoBot
@@ -69,13 +69,16 @@ async def log_to_admin_channel(context: ContextTypes.DEFAULT_TYPE, message: str)
 
 def get_user_mention(user): return user.mention_markdown_v2(user.full_name)
 
-async def is_user_admin(chat, user_id):
+# --- REWRITTEN & MORE RELIABLE: is_user_admin ---
+async def is_user_admin(chat_id: int, user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    """Checks if a user is an admin by fetching the list of all admins."""
     try:
-        member = await chat.get_member(user_id)
-        return member.status in [ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER]
-    except Exception: return False
-    
-# (process_spam, check_message, handle_links, stats_command, start_command, and info_handler_group are unchanged)
+        admins = await context.bot.get_chat_administrators(chat_id)
+        return user_id in {admin.user.id for admin in admins}
+    except Exception as e:
+        logger.error(f"Could not get admin list for chat {chat_id}: {e}")
+        return False # Fails safe if bot can't get admin list
+
 # --- Core Logic & Handlers ---
 async def process_spam(update: Update, context: ContextTypes.DEFAULT_TYPE, reason: str):
     message, chat, user = update.effective_message, update.effective_chat, update.effective_user
@@ -101,17 +104,17 @@ async def process_spam(update: Update, context: ContextTypes.DEFAULT_TYPE, reaso
 async def check_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message, user, chat = update.effective_message, update.effective_user, update.effective_chat
     if not all([message, user, chat, message.text]): return
-    if await is_user_admin(chat, user.id): return
+    if await is_user_admin(chat.id, user.id, context): return
     if ADDRESS_REGEX.search(message.text): await process_spam(update, context, "Crypto Address Detected")
         
 async def handle_links(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user, chat = update.effective_user, update.effective_chat
-    if not all([user, chat]) or await is_user_admin(chat, user.id): return
+    if not all([user, chat]) or await is_user_admin(chat.id, user.id, context): return
     await process_spam(update, context, "Unauthorized Link")
 
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user, chat = update.effective_user, update.effective_chat
-    if not all([user, chat]) or not await is_user_admin(chat, user.id): await update.message.reply_text("This command is for admins only."); return
+    if not all([user, chat]) or not await is_user_admin(chat.id, user.id, context): await update.message.reply_text("This command is for admins only."); return
     deleted, muted, banned = db.get_stats(chat.id)
     await update.message.reply_text(f"📈 *Bot Statistics for the Last 7 Days*\n\n• Messages Deleted/Warned: `{deleted}`\n• Users Muted: `{muted}`\n• Users Banned: `{banned}`\n\nTotal actions taken: `{deleted + muted + banned}`", parse_mode=ParseMode.MARKDOWN_V2)
 
@@ -128,48 +131,32 @@ async def ping_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(HELP_MESSAGE, parse_mode=ParseMode.MARKDOWN_V2, disable_web_page_preview=True)
 
-# --- CORRECTED AND SIMPLIFIED: reset_user_command ---
+# --- REWRITTEN AND SIMPLIFIED: reset_user_command ---
 async def reset_user_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Admin command to reset a single user's strikes. Now more robust."""
     admin_user, chat, message = update.effective_user, update.effective_chat, update.effective_message
-    logger.info(f"Admin {admin_user.id} initiated /reset command in chat {chat.id}")
-
-    # 1. Admin Check (with a reply on failure)
-    if not await is_user_admin(chat, admin_user.id):
+    
+    if not await is_user_admin(chat.id, admin_user.id, context):
         await message.reply_text("This command is for admins only.")
         return
 
     target_user = None
-    # Case 1: Command is a reply to another user's message
     if message.reply_to_message:
         target_user = message.reply_to_message.from_user
-        logger.info(f"Reset target identified by reply: {target_user.id}")
-    
-    # Case 2: Command has a user ID as an argument (e.g., /reset 12345678)
     elif context.args:
         try:
             user_id = int(context.args[0])
-            # We need to fetch the user object to get their name for the mention
             target_user = await context.bot.get_chat_member(chat.id, user_id).user
-            logger.info(f"Reset target identified by ID: {target_user.id}")
         except (ValueError, IndexError):
-            await message.reply_text("Invalid User ID provided\. Please provide a valid number\.", parse_mode=ParseMode.MARKDOWN_V2)
+            await message.reply_text("That's not a valid User ID. Please provide a number.", parse_mode="Markdown")
             return
         except BadRequest:
-            await message.reply_text("Could not find a user with that ID in this chat\.", parse_mode=ParseMode.MARKDOWN_V2)
+            await message.reply_text("I can't find a user with that ID in this chat.", parse_mode="Markdown")
             return
 
-    # If no target was found by either method
     if not target_user:
-        await message.reply_text(
-            "To use this command, please either:\n"
-            "1\. **Reply** to a user's message with `/reset`\n"
-            "2\. **Provide** a User ID like `/reset 123456789`",
-            parse_mode="Markdown"
-        )
+        await message.reply_text("Please reply to a user or provide their User ID after the command.", parse_mode="Markdown")
         return
     
-    # Perform the reset
     target_user_mention = get_user_mention(target_user)
     if db.reset_user_strikes(chat.id, target_user.id):
         reply_text = f"✅ Strikes for {target_user_mention} have been reset to 0\."
@@ -186,8 +173,10 @@ async def reset_user_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 async def reset_all_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     admin_user, chat = update.effective_user, update.effective_chat
-    if not all([admin_user, chat]) or not await is_user_admin(chat, admin_user.id):
-        await update.message.reply_text("This command is for admins only."); return
+    if not await is_user_admin(chat.id, admin_user.id, context):
+        await update.message.reply_text("This command is for admins only.")
+        return
+        
     reset_count = db.reset_all_strikes(chat.id)
     reply_text = f"✅ All strikes have been reset\. {reset_count} user records were cleared\."
     admin_mention = get_user_mention(admin_user)
@@ -220,4 +209,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
