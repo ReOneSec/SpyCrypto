@@ -24,8 +24,8 @@ if not TOKEN or not MONGO_URI:
     exit(1)
 
 # --- Database Manager Class ---
+# (This class is unchanged and correct)
 class DatabaseManager:
-    # (This class is unchanged and correct)
     def __init__(self, uri):
         self.client = MongoClient(uri)
         self.db = self.client.spyCryptoBot
@@ -50,7 +50,6 @@ class DatabaseManager:
 # --- Regex & Bot Data ---
 PATTERNS = { "Ethereum (EVM chains)": r"0x[a-fA-F0-9]{40}", "Bitcoin (BTC)": r"[13][a-km-zA-HJ-NP-Z1-9]{25,34}|bc1[a-zA-HJ-NP-Z0-9]{38,58}", "Litecoin (LTC)": r"[LM][a-km-zA-HJ-NP-Z1-9]{26,33}|ltc1[a-zA-HJ-NP-Z0-9]{39,59}", "Dogecoin (DOGE)": r"D[a-km-zA-HJ-NP-Z1-9]{33}", "Bitcoin Cash (BCH)": r"(bitcoincash:)?q[a-z0-9]{41}", "Dash (DASH)": r"X[1-9A-HJ-NP-Za-km-z]{33}", "Zcash (ZEC)": r"t1[a-km-zA-HJ-NP-Z1-9]{33}|z[a-km-zA-HJ-NP-Z1-9]{93}", "Solana (SOL)": r"[1-9A-HJ-NP-Za-km-z]{32,44}", "TRON (TRX)": r"T[a-zA-HJ-NP-Z1-9]{33}", "Polkadot (DOT)": r"1[a-zA-HJ-NP-Z1-9]{46,47}", "Ripple (XRP)": r"r[a-km-zA-HJ-NP-Z1-9]{25,34}", "Cardano (ADA)": r"addr1[a-z0-9]{98}|[DE][1-9A-HJ-NP-Za-km-z]{32,103}", "Monero (XMR)": r"4[0-9AB][1-9A-HJ-NP-Za-km-z]{93}", "BNB Beacon Chain": r"bnb1[a-z0-9]{38}", "Avalanche (AVAX X-Chain)": r"X-[a-km-zA-HJ-NP-Z1-9]{44}", "Cosmos (ATOM)": r"cosmos1[a-z0-9]{38}", "Tezos (XTZ)": r"tz[1-3][a-km-zA-HJ-NP-Z1-9]{33}", "NEAR Protocol": r"[a-z0-9\._-]{2,64}\.near", "Stellar (XLM)": r"G[A-Z0-9]{55}", "Algorand (ALGO)": r"[A-Z2-7]{58}", "The Open Network (TON)": r"(?:-1|0):[a-fA-F0-9]{64}|[UEk][a-zA-Z0-9\-_]{47}" }
 ADDRESS_REGEX = re.compile(rf"\b({'|'.join(PATTERNS.values())})\b", re.IGNORECASE)
-
 db = DatabaseManager(MONGO_URI)
 
 # --- Helper Functions ---
@@ -69,18 +68,22 @@ async def log_to_admin_channel(context: ContextTypes.DEFAULT_TYPE, message: str)
 
 def get_user_mention(user): return user.mention_markdown_v2(user.full_name)
 
-# --- REWRITTEN & MORE RELIABLE: is_user_admin ---
+# --- REWRITTEN & SIMPLIFIED: is_user_admin ---
 async def is_user_admin(chat_id: int, user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
-    """Checks if a user is an admin by fetching the list of all admins."""
+    """Checks if a user is an admin or owner. This is the most reliable method."""
+    if user_id == chat_id:  # User is the owner in a private chat with themselves
+        return True
     try:
+        # This requires the bot to have "Add New Admins" permission
         admins = await context.bot.get_chat_administrators(chat_id)
         return user_id in {admin.user.id for admin in admins}
     except Exception as e:
-        logger.error(f"Could not get admin list for chat {chat_id}: {e}")
-        return False # Fails safe if bot can't get admin list
+        logger.error(f"Could not get admin list for chat {chat_id}. Does the bot have 'Add New Admins' permission? Error: {e}")
+        return False
 
 # --- Core Logic & Handlers ---
 async def process_spam(update: Update, context: ContextTypes.DEFAULT_TYPE, reason: str):
+    # This function is correct and remains unchanged
     message, chat, user = update.effective_message, update.effective_chat, update.effective_user
     try: await message.delete()
     except (BadRequest, Forbidden): logger.warning(f"Could not delete message {message.message_id} in chat {chat.id}."); return
@@ -114,7 +117,7 @@ async def handle_links(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user, chat = update.effective_user, update.effective_chat
-    if not all([user, chat]) or not await is_user_admin(chat.id, user.id, context): await update.message.reply_text("This command is for admins only."); return
+    if not await is_user_admin(chat.id, user.id, context): await update.message.reply_text("This command is for admins only."); return
     deleted, muted, banned = db.get_stats(chat.id)
     await update.message.reply_text(f"📈 *Bot Statistics for the Last 7 Days*\n\n• Messages Deleted/Warned: `{deleted}`\n• Users Muted: `{muted}`\n• Users Banned: `{banned}`\n\nTotal actions taken: `{deleted + muted + banned}`", parse_mode=ParseMode.MARKDOWN_V2)
 
@@ -134,8 +137,10 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # --- REWRITTEN AND SIMPLIFIED: reset_user_command ---
 async def reset_user_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     admin_user, chat, message = update.effective_user, update.effective_chat, update.effective_message
-    
+    logger.info(f"User {admin_user.id} initiated /reset command in chat {chat.id}")
+
     if not await is_user_admin(chat.id, admin_user.id, context):
+        logger.warning(f"NON-ADMIN {admin_user.id} tried to use /reset.")
         await message.reply_text("This command is for admins only.")
         return
 
@@ -145,9 +150,9 @@ async def reset_user_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     elif context.args:
         try:
             user_id = int(context.args[0])
-            target_user = await context.bot.get_chat_member(chat.id, user_id).user
+            target_user = (await context.bot.get_chat_member(chat.id, user_id)).user
         except (ValueError, IndexError):
-            await message.reply_text("That's not a valid User ID. Please provide a number.", parse_mode="Markdown")
+            await message.reply_text("That doesn't look like a valid User ID. Please provide a number.", parse_mode="Markdown")
             return
         except BadRequest:
             await message.reply_text("I can't find a user with that ID in this chat.", parse_mode="Markdown")
@@ -171,10 +176,14 @@ async def reset_user_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         
     await message.reply_text(reply_text, parse_mode=ParseMode.MARKDOWN_V2)
 
+# --- REWRITTEN AND SIMPLIFIED: reset_all_command ---
 async def reset_all_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    admin_user, chat = update.effective_user, update.effective_chat
+    admin_user, chat, message = update.effective_user, update.effective_chat, update.effective_message
+    logger.info(f"User {admin_user.id} initiated /resetall command in chat {chat.id}")
+
     if not await is_user_admin(chat.id, admin_user.id, context):
-        await update.message.reply_text("This command is for admins only.")
+        logger.warning(f"NON-ADMIN {admin_user.id} tried to use /resetall.")
+        await message.reply_text("This command is for admins only.")
         return
         
     reset_count = db.reset_all_strikes(chat.id)
@@ -184,24 +193,23 @@ async def reset_all_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                    f"⚖️ *Action:* `All Strikes Reset`\n"
                    f"👮 *Admin:* {admin_mention}")
     await log_to_admin_channel(context, log_message)
-    await update.message.reply_text(reply_text, parse_mode=ParseMode.MARKDOWN_V2)
+    await message.reply_text(reply_text, parse_mode=ParseMode.MARKDOWN_V2)
 
 # --- Main Function to Run the Bot ---
 def main():
     logger.info("Bot starting...")
     application = Application.builder().token(TOKEN).build()
 
+    # Add handlers
     application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), check_message))
     application.add_handler(MessageHandler(filters.UpdateType.EDITED_MESSAGE & filters.TEXT & (~filters.COMMAND), check_message))
     application.add_handler(MessageHandler(filters.Entity("url") | filters.Entity("text_link"), handle_links))
-    
     application.add_handler(CommandHandler("start", start_command, filters=filters.ChatType.PRIVATE))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("ping", ping_command))
     application.add_handler(CommandHandler("stats", stats_command))
     application.add_handler(CommandHandler("reset", reset_user_command, filters=filters.ChatType.GROUP))
     application.add_handler(CommandHandler("resetall", reset_all_command, filters=filters.ChatType.GROUP))
-    
     application.add_handler(MessageHandler(filters.Entity("mention") & filters.ChatType.GROUP, info_handler_group))
 
     logger.info("Bot polling started...")
