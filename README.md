@@ -122,7 +122,7 @@ ADMIN_LOG_CHANNEL="-1001234567890"
 ```
 4. Run the Bot
 ```
-python main.py
+python bot.py
 ```
 6. Add to Your Group
  * Add your bot to your Telegram group.
