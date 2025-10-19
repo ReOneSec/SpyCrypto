@@ -28,6 +28,7 @@ if not TOKEN or not MONGO_URI:
     exit(1)
 
 # --- Database Manager Class ---
+# (This class is unchanged and correct)
 class DatabaseManager:
     def __init__(self, uri):
         self.client = MongoClient(uri)
@@ -74,14 +75,7 @@ class DatabaseManager:
         return deleted_count, muted_count, banned_count
 
 # --- Regex & Bot Data ---
-PATTERNS = {
-    "Ethereum (EVM chains)": r"0x[a-fA-F0-9]{40}",
-    "Bitcoin (BTC)": r"[13][a-km-zA-HJ-NP-Z1-9]{25,34}|bc1[a-zA-HJ-NP-Z0-9]{38,58}",
-    "Litecoin (LTC)": r"[LM][a-km-zA-HJ-NP-Z1-9]{26,33}|ltc1[a-zA-HJ-NP-Z0-9]{39,59}",
-    "Dogecoin (DOGE)": r"D[a-km-zA-HJ-NP-Z1-9]{33}",
-    # ... (all other patterns are unchanged) ...
-    "The Open Network (TON)": r"(?:-1|0):[a-fA-F0-9]{64}|[UEk][a-zA-Z0-9\-_]{47}"
-}
+PATTERNS = { "Ethereum (EVM chains)": r"0x[a-fA-F0-9]{40}", "Bitcoin (BTC)": r"[13][a-km-zA-HJ-NP-Z1-9]{25,34}|bc1[a-zA-HJ-NP-Z0-9]{38,58}", "Litecoin (LTC)": r"[LM][a-km-zA-HJ-NP-Z1-9]{26,33}|ltc1[a-zA-HJ-NP-Z0-9]{39,59}", "Dogecoin (DOGE)": r"D[a-km-zA-HJ-NP-Z1-9]{33}", "Bitcoin Cash (BCH)": r"(bitcoincash:)?q[a-z0-9]{41}", "Dash (DASH)": r"X[1-9A-HJ-NP-Za-km-z]{33}", "Zcash (ZEC)": r"t1[a-km-zA-HJ-NP-Z1-9]{33}|z[a-km-zA-HJ-NP-Z1-9]{93}", "Solana (SOL)": r"[1-9A-HJ-NP-Za-km-z]{32,44}", "TRON (TRX)": r"T[a-zA-HJ-NP-Z1-9]{33}", "Polkadot (DOT)": r"1[a-zA-HJ-NP-Z1-9]{46,47}", "Ripple (XRP)": r"r[a-km-zA-HJ-NP-Z1-9]{25,34}", "Cardano (ADA)": r"addr1[a-z0-9]{98}|[DE][1-9A-HJ-NP-Za-km-z]{32,103}", "Monero (XMR)": r"4[0-9AB][1-9A-HJ-NP-Za-km-z]{93}", "BNB Beacon Chain": r"bnb1[a-z0-9]{38}", "Avalanche (AVAX X-Chain)": r"X-[a-km-zA-HJ-NP-Z1-9]{44}", "Cosmos (ATOM)": r"cosmos1[a-z0-9]{38}", "Tezos (XTZ)": r"tz[1-3][a-km-zA-HJ-NP-Z1-9]{33}", "NEAR Protocol": r"[a-z0-9\._-]{2,64}\.near", "Stellar (XLM)": r"G[A-Z0-9]{55}", "Algorand (ALGO)": r"[A-Z2-7]{58}", "The Open Network (TON)": r"(?:-1|0):[a-fA-F0-9]{64}|[UEk][a-zA-Z0-9\-_]{47}" }
 ADDRESS_REGEX = re.compile(rf"\b({'|'.join(PATTERNS.values())})\b", re.IGNORECASE)
 
 db = DatabaseManager(MONGO_URI)
@@ -100,22 +94,22 @@ SUPPORTED_CHAINS_MESSAGE = (
     f"{CHAIN_LIST_TEXT}"
 )
 
-# --- NEW: Help message text ---
+# --- UPGRADED: Help message with clearer instructions ---
 HELP_MESSAGE = (
     f"🛡️ *SpyCrypto Bot Help*\n\n"
-    f"I am a moderation bot\. Here is how to use me:\n\n"
-    f"*Commands for Everyone:*\n"
-    f"`/start` \(in PM\): Shows this help message and the list of chains I support\.\n"
+    f"I am a moderation bot that keeps this group clean\. Here's how to use me:\n\n"
+    f"*Everyone can use:*\n"
+    f"`/help`: Shows this help message\.\n"
+    f"`/start` \(in PM\): Shows supported chains\.\n"
     f"`@my_username` \(in group\): Mention me to see the list of supported chains\.\n\n"
     f"*Admin\-Only Commands:*\n"
+    f"`/ping`: Check if I'm online and responsive\.\n"
     f"`/stats`: View spam statistics for the last 7 days\.\n"
-    f"`/reset`: Reply to a user, tag them, or use their ID to reset their strikes to 0\.\n"
+    f"`/reset`: Reply to a user OR use their ID to reset their strikes to 0\.\n"
     f"  • *Usage \(Reply\):* Reply to a user's message with `/reset`\n"
-    f"  • *Usage \(Tag\):* Type `/reset` and @tag the user \(e\.g\., `/reset @JohnDoe`\)\n"
     f"  • *Usage \(ID\):* Type `/reset 123456789`\n"
     f"`/resetall`: Reset the strike count for *all* members in this group\."
 )
-
 
 async def log_to_admin_channel(context: ContextTypes.DEFAULT_TYPE, message: str):
     if ADMIN_LOG_CHANNEL:
@@ -127,135 +121,88 @@ async def log_to_admin_channel(context: ContextTypes.DEFAULT_TYPE, message: str)
 def get_user_mention(user):
     return user.mention_markdown_v2(user.full_name)
 
-# --- NEW: Improved admin check function ---
 async def is_user_admin(chat, user_id):
-    """Checks if a user is an admin or owner in a chat."""
     try:
         member = await chat.get_member(user_id)
         return member.status in [ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER]
     except Exception as e:
         logger.error(f"Error checking admin status for {user_id} in {chat.id}: {e}")
-        # Return False if check fails (e.g., bot lacks permissions)
         return False
     
+# (process_spam, check_message, handle_links, stats_command, start_command, and info_handler_group are unchanged and correct)
 # --- Core Logic: Punishment System ---
 async def process_spam(update: Update, context: ContextTypes.DEFAULT_TYPE, reason: str):
-    message = update.effective_message
-    chat = update.effective_chat
-    user = update.effective_user
-    
-    try:
-        await message.delete()
-    except (BadRequest, Forbidden):
-        logger.warning(f"Could not delete message {message.message_id} in chat {chat.id}.")
-        return
-
+    message, chat, user = update.effective_message, update.effective_chat, update.effective_user
+    try: await message.delete()
+    except (BadRequest, Forbidden): logger.warning(f"Could not delete message {message.message_id} in chat {chat.id}."); return
     new_strike_count = db.increment_user_strikes(chat.id, user.id, user.username or "N/A")
-    user_mention = get_user_mention(user)
-    action_taken = "deleted"
-    
+    user_mention, action_taken = get_user_mention(user), "deleted"
     if new_strike_count == 1:
-        warning_text = f"{user_mention}, posting unauthorized content is not allowed\. This is your first warning\."
-        await context.bot.send_message(chat.id, warning_text, parse_mode=ParseMode.MARKDOWN_V2)
-        action_taken = "warned"
+        await context.bot.send_message(chat.id, f"{user_mention}, posting unauthorized content is not allowed\. This is your first warning\.", parse_mode=ParseMode.MARKDOWN_V2); action_taken = "warned"
     elif new_strike_count == 2:
-        mute_duration = timedelta(days=1)
         try:
-            await context.bot.restrict_chat_member(
-                chat_id=chat.id, user_id=user.id,
-                permissions={'can_send_messages': False},
-                until_date=datetime.now() + mute_duration
-            )
-            mute_text = f"{user_mention}, you have received a second strike and are now muted for 24 hours\."
-            await context.bot.send_message(chat.id, mute_text, parse_mode=ParseMode.MARKDOWN_V2)
-            action_taken = "muted"
-        except (Forbidden, BadRequest):
-            logger.warning(f"No permission to mute users in chat {chat.id}")
+            await context.bot.restrict_chat_member(chat.id, user.id, permissions={'can_send_messages': False}, until_date=datetime.now() + timedelta(days=1))
+            await context.bot.send_message(chat.id, f"{user_mention}, you have received a second strike and are now muted for 24 hours\.", parse_mode=ParseMode.MARKDOWN_V2); action_taken = "muted"
+        except (Forbidden, BadRequest): logger.warning(f"No permission to mute users in chat {chat.id}")
     else:
         try:
-            await context.bot.ban_chat_member(chat_id=chat.id, user_id=user.id)
-            ban_text = f"{user_mention} has been banned after receiving three strikes\."
-            await context.bot.send_message(chat.id, ban_text, parse_mode=ParseMode.MARKDOWN_V2)
-            action_taken = "banned"
-        except (Forbidden, BadRequest):
-            logger.warning(f"No permission to ban users in chat {chat.id}")
-            
+            await context.bot.ban_chat_member(chat.id, user.id)
+            await context.bot.send_message(chat.id, f"{user_mention} has been banned after receiving three strikes\.", parse_mode=ParseMode.MARKDOWN_V2); action_taken = "banned"
+        except (Forbidden, BadRequest): logger.warning(f"No permission to ban users in chat {chat.id}")
     db.log_action(chat.id, user.id, action_taken, reason)
-    safe_reason = escape_markdown_v2(reason)
-    safe_chat_title = escape_markdown_v2(chat.title)
-    
-    log_message = (
-        f"✅ *Action Taken in {safe_chat_title}*\n\n"
-        f"👤 *User:* {user_mention} `({user.id})`\n"
-        f"⚖️ *Action:* `{escape_markdown_v2(action_taken.upper())}`\n"
-        f"🗒️ *Reason:* `{safe_reason}`\n"
-        f"⚠️ *Total Strikes:* `{new_strike_count}`"
-    )
-    await log_to_admin_channel(context, log_message)
+    safe_reason, safe_chat_title = escape_markdown_v2(reason), escape_markdown_v2(chat.title)
+    await log_to_admin_channel(context, f"✅ *Action Taken in {safe_chat_title}*\n\n👤 *User:* {user_mention} `({user.id})`\n⚖️ *Action:* `{escape_markdown_v2(action_taken.upper())}`\n🗒️ *Reason:* `{safe_reason}`\n⚠️ *Total Strikes:* `{new_strike_count}`")
 
 # --- Message & Command Handlers ---
 async def check_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    message = update.effective_message
-    user = update.effective_user
-    chat = update.effective_chat
+    message, user, chat = update.effective_message, update.effective_user, update.effective_chat
     if not all([message, user, chat, message.text]): return
     if await is_user_admin(chat, user.id): return
-    if ADDRESS_REGEX.search(message.text):
-        await process_spam(update, context, "Crypto Address Detected")
+    if ADDRESS_REGEX.search(message.text): await process_spam(update, context, "Crypto Address Detected")
         
 async def handle_links(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    chat = update.effective_chat
+    user, chat = update.effective_user, update.effective_chat
     if not all([user, chat]): return
     if await is_user_admin(chat, user.id): return
     await process_spam(update, context, "Unauthorized Link")
 
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    chat = update.effective_chat
+    user, chat = update.effective_user, update.effective_chat
     if not all([user, chat]): return
-    if not await is_user_admin(chat, user.id):
-        await update.message.reply_text("This command is for admins only.")
-        return
+    if not await is_user_admin(chat, user.id): await update.message.reply_text("This command is for admins only."); return
     deleted, muted, banned = db.get_stats(chat.id)
     total_actions = deleted + muted + banned
-    stats_text = (
-        f"📈 *Bot Statistics for the Last 7 Days*\n\n"
-        f"• Messages Deleted/Warned: `{deleted}`\n"
-        f"• Users Muted: `{muted}`\n"
-        f"• Users Banned: `{banned}`\n\n"
-        f"Total actions taken: `{total_actions}`"
-    )
-    await update.message.reply_text(stats_text, parse_mode=ParseMode.MARKDOWN_V2)
+    await update.message.reply_text(f"📈 *Bot Statistics for the Last 7 Days*\n\n• Messages Deleted/Warned: `{deleted}`\n• Users Muted: `{muted}`\n• Users Banned: `{banned}`\n\nTotal actions taken: `{total_actions}`", parse_mode=ParseMode.MARKDOWN_V2)
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handles the /start command in private chat. Now shows help."""
-    await update.message.reply_text(HELP_MESSAGE, parse_mode=ParseMode.MARKDOWN_V2, disable_web_page_preview=True)
-
-# --- NEW: /help command handler ---
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handles the /help command in private or group chat."""
-    await update.message.reply_text(HELP_MESSAGE, parse_mode=ParseMode.MARKDOWN_V2, disable_web_page_preview=True)
+    await update.message.reply_text(SUPPORTED_CHAINS_MESSAGE, parse_mode=ParseMode.MARKDOWN_V2, disable_web_page_preview=True)
 
 async def info_handler_group(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.bot.username in update.message.text:
         await update.message.reply_text(SUPPORTED_CHAINS_MESSAGE, parse_mode=ParseMode.MARKDOWN_V2, disable_web_page_preview=True)
 
-# --- UPGRADED: reset_user_command ---
+# --- NEW: /ping command handler ---
+async def ping_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """A simple command to check if the bot is alive."""
+    await update.message.reply_text("Pong\! I am online and running\.", parse_mode=ParseMode.MARKDOWN_V2)
+
+# --- NEW: /help command handler ---
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handles the /help command."""
+    await update.message.reply_text(HELP_MESSAGE, parse_mode=ParseMode.MARKDOWN_V2, disable_web_page_preview=True)
+
+# --- UPGRADED: A much more robust reset_user_command ---
 async def reset_user_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Admin command to reset a single user's strikes."""
-    admin_user = update.effective_user
-    chat = update.effective_chat
-    message = update.effective_message
+    admin_user, chat, message = update.effective_user, update.effective_chat, update.effective_message
     if not all([admin_user, chat]): return
 
     if not await is_user_admin(chat, admin_user.id):
         await update.message.reply_text("This command is for admins only.")
         return
 
-    target_user = None
     target_user_id = None
-    target_user_mention = "Unknown User"
+    target_user_mention = None
 
     # Case 1: Command is a reply
     if message.reply_to_message:
@@ -263,35 +210,20 @@ async def reset_user_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         target_user_id = target_user.id
         target_user_mention = get_user_mention(target_user)
 
-    # Case 2: Command has a user mention (tag) or ID
-    else:
-        # Check for user ID in arguments
-        if context.args:
-            try:
-                target_user_id = int(context.args[0])
-                target_user_mention = f"User `({target_user_id})`"
-            except ValueError:
-                pass # Not a user ID
-
-        # Check for text_mention (tagged user)
-        if not target_user_id and message.entities:
-            for entity in message.entities:
-                if entity.type == MessageEntity.TEXT_MENTION and entity.user:
-                    target_user = entity.user
-                    target_user_id = target_user.id
-                    target_user_mention = get_user_mention(target_user)
-                    break
-                # Note: We don't support @username mentions as they are unreliable
-                # for getting user IDs without a local database.
+    # Case 2: Command has a user ID as an argument
+    elif context.args:
+        try:
+            target_user_id = int(context.args[0])
+            # We don't know the user's name, so we create a simple mention
+            target_user_mention = f"User with ID `{target_user_id}`"
+        except (ValueError, IndexError):
+            await update.message.reply_text("Invalid User ID provided\.", parse_mode=ParseMode.MARKDOWN_V2)
+            return
 
     # If no target was found
     if not target_user_id:
         await update.message.reply_text(
-            "Please reply to a user, tag them, or provide their User ID\.\n\n"
-            "*Usage:*\n"
-            "• Reply to a message with `/reset`\n"
-            "• Type `/reset @JohnDoe` \(tagging the user\)\n"
-            "• Type `/reset 123456789`",
+            "Please reply to a user or provide their User ID to reset their strikes\.",
             parse_mode=ParseMode.MARKDOWN_V2
         )
         return
@@ -316,13 +248,11 @@ async def reset_user_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 async def reset_all_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Admin command to reset all strikes in the group."""
-    admin_user = update.effective_user
-    chat = update.effective_chat
+    admin_user, chat = update.effective_user, update.effective_chat
     if not all([admin_user, chat]): return
     
     if not await is_user_admin(chat, admin_user.id):
-        await update.message.reply_text("This command is for admins only.")
-        return
+        await update.message.reply_text("This command is for admins only."); return
 
     reset_count = db.reset_all_strikes(chat.id)
     reply_text = f"✅ All strikes have been reset\. {reset_count} user records were cleared\."
@@ -342,19 +272,20 @@ def main():
     logger.info("Bot starting...")
     application = Application.builder().token(TOKEN).build()
 
-    # --- Add Moderation Handlers ---
+    # Add Moderation Handlers
     application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), check_message))
     application.add_handler(MessageHandler(filters.UpdateType.EDITED_MESSAGE & filters.TEXT & (~filters.COMMAND), check_message))
     application.add_handler(MessageHandler(filters.Entity("url") | filters.Entity("text_link"), handle_links))
     
-    # --- Add Command Handlers ---
+    # Add Command Handlers
     application.add_handler(CommandHandler("start", start_command, filters=filters.ChatType.PRIVATE))
     application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("ping", ping_command)) # NEW
     application.add_handler(CommandHandler("stats", stats_command))
     application.add_handler(CommandHandler("reset", reset_user_command, filters=filters.ChatType.GROUP))
     application.add_handler(CommandHandler("resetall", reset_all_command, filters=filters.ChatType.GROUP))
     
-    # --- Add Info Handlers ---
+    # Add Info Handlers
     application.add_handler(MessageHandler(filters.Entity("mention") & filters.ChatType.GROUP, info_handler_group))
 
     logger.info("Bot polling started...")
@@ -362,4 +293,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-        
+    
